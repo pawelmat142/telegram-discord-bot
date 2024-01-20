@@ -1,6 +1,6 @@
 ## Description
 
-Bot for automatically sending messages from a private telegram channel to a discord channel
+Bot for automatically sending messages from a private telegram channel to a discord channel. Build with NestJS
 
 ## Installation
 
@@ -10,10 +10,11 @@ Bot for automatically sending messages from a private telegram channel to a disc
 $ git init
 $ git clone https://github.com/pawelmat142/telegram-discord-bot.git .
 $ npm i
+$ npm run build
 ```
 
 ## Configuration
-* create .env file inside project directory
+* create .env file inside project/dist directory
 * provide credentials for telegram and discord channels:
 ```bash
 TELEGRAM_API_ID=<api_id>
@@ -38,15 +39,4 @@ DISCORD_CHANNEL_ID_2=<discord_channel_id_2>
 
 ## Running the app
 
-```bash
-# development
-$ npm run start
 
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
-```
-
-## Test
