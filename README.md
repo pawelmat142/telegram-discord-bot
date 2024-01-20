@@ -12,6 +12,7 @@ git remote add origin https://github.com/pawelmat142/telegram-discord-bot.git
 git pull
 git checkout main -f
 git branch --set-upstream-to origin/main
+npm i
 npm run build
 ```
 
