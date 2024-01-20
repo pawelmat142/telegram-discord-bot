@@ -52,16 +52,19 @@ node main.js
 ```bash
 ctrl+c
 ```
-* run app again
+
+* run app again:
 ```bash
 node main.js
 ```
+
 * bot is running
 * now you can run app with forever or another library:
 ```bash
 forever start main.js
 ```
+
 * remember that first run of app always will ask for telegram login code so to be able to put the code in prompt run the app first by:
-* ```bash
+```bash
 node main.js
 ```
