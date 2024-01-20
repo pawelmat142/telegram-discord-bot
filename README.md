@@ -8,8 +8,10 @@ Bot for automatically sending messages from a private telegram channel to a disc
 * open command prompt in this directory
 ```bash
 $ git init
-$ git clone https://github.com/pawelmat142/telegram-discord-bot.git .
-$ npm i
+$ git remote add origin <your-repo-url>
+$ git pull
+$ git checkout main -f
+$ git branch --set-upstream-to origin/main
 $ npm run build
 ```
 
