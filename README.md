@@ -29,7 +29,7 @@ DISCORD_BOT_TOKEN=<bot_token>
 * to get api_id and api_hash go to (https://my.telegram.org/auth) ->  "API development tools" -> fill form
 * to get bot_token for discord: (https://discordgsm.com/guide/how-to-get-a-discord-bot-token)
 
-  to .env file also provide channel id pairs like:
+* to .env file also provide channel id pairs like:
 ```bash
 TELEGRAM_CHANNEL_ID_1=<telegram_channel_id_1>
 DISCORD_CHANNEL_ID_1=<discord_channel_id_1>
@@ -48,16 +48,19 @@ node main.js
 ```
 * you will receive code in your telegram app
 * command prompt will ask you for this code
-* after logging in turn stop the app
+* after logging in stop the app:
 ```bash
 ctrl+c
 ```
 * run app again
-* ```bash
+```bash
 node main.js
 ```
 * bot is running
-* now you can run app with forever or another library
+* now you can run app with forever or another library:
+```bash
+forever start main.js
+```
 * remember that first run of app always will ask for telegram login code so to be able to put the code in prompt run the app first by:
 * ```bash
 node main.js
