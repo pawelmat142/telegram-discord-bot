@@ -42,4 +42,23 @@ DISCORD_CHANNEL_ID_2=<discord_channel_id_2>
 
 ## Running the app
 
-
+* open command prompt in directory ./project/dist
+```bash
+node main.js
+```
+* you will receive code in your telegram app
+* command prompt will ask you for this code
+* after logging in turn stop the app
+```bash
+ctrl+c
+```
+* run app again
+* ```bash
+node main.js
+```
+* bot is running
+* now you can run app with forever or another library
+* remember that first run of app always will ask for telegram login code so to be able to put the code in prompt run the app first by:
+* ```bash
+node main.js
+```
