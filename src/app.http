@@ -1,2 +1,8 @@
 ### test
 GET http://localhost:8008/test
+
+### logChannels
+GET http://localhost:8008/log-channels
+
+### getLogs
+GET http://localhost:8008/logs

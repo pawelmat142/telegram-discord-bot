@@ -1,20 +1,28 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException, UnsupportedMediaTypeException } from '@nestjs/common';
 import { Message } from 'src/telegram/message';
 import { TelegramService } from 'src/telegram/telegram.service';
 import { Channel, Client, GatewayIntentBits, TextChannel } from 'discord.js';
+import { Log } from './log';
+import { Model } from 'mongoose';
+import { InjectModel } from '@nestjs/mongoose';
 
 @Injectable()
 export class DiscordService {
     private logger = new Logger(DiscordService.name)
 
+
+    private readonly mongoOn = process.env.MONGO_ON === 'true'
+    private readonly prodEnv = process.env.ENV_TYPE === 'PROD'
+
     constructor(
         private readonly telegramService: TelegramService,
+        @InjectModel(Log.name) private logModel: Model<Log>,
     ) {
         this.client = this.initClient()
     }
 
     private readonly client: Client
-    private readonly channels: Map<String, Channel> = new Map() //telegram channel id -> discord Channel
+    private readonly channels: Map<string, Channel> = new Map() //telegram channel id -> discord Channel
         
     async init() {
         await this.telegramService.initService()
@@ -27,9 +35,11 @@ export class DiscordService {
         const channel: Channel = this.channels.get(telegramChannelId)
         if (channel instanceof TextChannel) {
             await channel.send(message?.message)
+            this.putLog(telegramChannelId, channel, message)
         } else {
             console.error('Channel is not a text channel')
         }
+
     }
 
     private async initChannels() {
@@ -42,6 +52,7 @@ export class DiscordService {
                 if (discordChannelId) {
                     const discordChannel = await this.client.channels.fetch(discordChannelId)
                     if (discordChannel) {
+                        discordChannel['discordChannelId'] = discordChannelId
                         this.channels.set(telegramChannelId, discordChannel)
                         this.logger.log(`Initialized discord channel ${iterator} with id ${discordChannelId}`)
                     }
@@ -50,9 +61,22 @@ export class DiscordService {
         } while(iterator++)
 
         const channels = Array.from(this.channels.values())
+        this.logChannels()
         if (!channels.length) {
             this.logger.error('Not found discord channels')
         }
+    }
+
+    public logChannels() {
+        this.channels.forEach((channel, key) => {
+            const log = `
+TELEGRAM_CHANNEL_ID: ${key}
+NAME: ${(channel?.['guild']?.['name'])}
+DISCORD_CHANNEL_ID: ${channel['discordChannelId']}
+DISCORD_NAME: ${(channel?.['name'])}
+`
+this.logger.log(log)
+})
     }
 
 
@@ -82,4 +106,25 @@ export class DiscordService {
         client.login(process.env.DISCORD_BOT_TOKEN)
         return client
     }
+
+    private putLog(telegramChannelId: string, channel: Channel, message: Message) {
+        if (!this.mongoOn || !this.prodEnv) {
+            return
+        }
+        return new this.logModel({
+            telegramChannelId: telegramChannelId,
+            discordChannelId: channel?.['discordChannelId'],
+            message: message?.message,
+            timestamp: new Date(),
+            discordChannelName: channel?.['guild']?.['name']
+        }).save()
+    }
+
+    public getLogs() {
+        if (!this.mongoOn) {
+            throw new UnsupportedMediaTypeException()
+        }
+        return this.logModel.find().exec()
+    }
+
 }
