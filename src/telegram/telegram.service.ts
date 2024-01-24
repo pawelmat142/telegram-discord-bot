@@ -1,9 +1,9 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Subject } from 'rxjs';
 import * as MTProto from '@mtproto/core';
 import * as path from 'path';
 import * as prompt from 'prompt';
-import { Message } from './message';
+import { TelegramMessage, Photo } from './message';
 
 // https://www.youtube.com/watch?v=TRNeRySFtg0
 
@@ -17,12 +17,22 @@ export class TelegramService {
     private readonly phoneNumber = process.env.TELEGRAM_PHONE_NUMBER
     private readonly channelIds: string[] = []
 
-    private mtProto: any
+    private mtProto: MTProto
 
-    private _channelsMessages$ = new Subject<Message>()
+    constructor(
+        // private readonly httpService: HttpService
+    ) {}
+
+    private _channelsMessages$ = new Subject<TelegramMessage>()
     public channelsMessages$ = this._channelsMessages$.asObservable()
 
+    private initFlag = false
+
     public async initService() {
+        if (this.initFlag) {
+            return
+        }
+        this.initFlag = true
         this.initChannelIds()
         this.initMTProto()
         await this.auth(this.phoneNumber)
@@ -72,7 +82,7 @@ export class TelegramService {
     private subscribeToUpdates(): void {
         this.mtProto.updates.on('updates', (updateInfo) => {
             updateInfo.updates.forEach((update) => {
-                const message = update?.message as Message
+                const message = update?.message as TelegramMessage
                 if (message) {
                     const updateChannelId = message.peer_id?.channel_id
                     if (this.channelIds.includes(updateChannelId)) {
@@ -82,6 +92,7 @@ export class TelegramService {
             })
         })
     }
+    
 
     private sendCode(mobile: string): Promise<any> {
         return this.mtProto.call('auth.sendCode', {
@@ -116,6 +127,42 @@ export class TelegramService {
             _: "inputUserSelf",
           },
         });
+    }
+
+
+    public async getPhoto(message: TelegramMessage): Promise<Uint8Array> {
+        const photo = message?.media?.photo
+        if (photo) {
+            try {
+                const file = await this.mtProto.call('upload.getFile', {
+                    location: {
+                      _: 'inputPhotoFileLocation',
+                      id: photo.id,
+                      access_hash: photo.access_hash,
+                      file_reference: photo.file_reference,
+                      thumb_size: this.getPhotoThumbSize(photo)
+                    },
+                    offset: 0,
+                    limit: 1048576, //1MB
+                })
+                return file.bytes
+            } catch (error) {
+                console.error(error)
+                return null
+            }
+        }
+        return null
+    }
+
+    private getPhotoThumbSize(photo: Photo): string {
+        var size = photo.sizes.find(size => size._ == 'photoSizeProgressive')
+        if (!size) {
+            size = photo.sizes.find(size => size._ == 'photoSize')
+        }
+        if (!size) {
+            size = photo.sizes[0]
+        }
+        return size?.type
     }
 
 }

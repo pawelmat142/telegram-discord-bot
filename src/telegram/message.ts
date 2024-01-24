@@ -1,4 +1,4 @@
-export interface Message {
+export interface TelegramMessage {
 
     date: number
     message: string
@@ -11,7 +11,7 @@ export interface Message {
 
     out: boolean
 
-    messageMedia: MessageMedia
+    media: MessageMedia
 }
 
 export interface PeerId {
@@ -29,11 +29,12 @@ export interface MessageMedia {
 
 export interface Photo {
     has_stickers: boolean
-    id: number
-    access_hash: number
-    file_reference: number
+    id: string
+    access_hash: string
+    file_reference: any
     date: number
     sizes: any
     video_sizes: any
     dc_id: number
+    file_id: string
 }

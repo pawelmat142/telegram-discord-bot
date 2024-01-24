@@ -1,7 +1,7 @@
-import { Injectable, Logger, UnauthorizedException, UnsupportedMediaTypeException } from '@nestjs/common';
-import { Message } from 'src/telegram/message';
+import { Injectable, Logger, UnsupportedMediaTypeException } from '@nestjs/common';
+import { TelegramMessage as TelegramMessage } from 'src/telegram/message';
 import { TelegramService } from 'src/telegram/telegram.service';
-import { Channel, Client, GatewayIntentBits, TextChannel } from 'discord.js';
+import { AttachmentBuilder, Channel, Client, GatewayIntentBits, MessageCreateOptions, TextChannel } from 'discord.js';
 import { Log } from './log';
 import { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
@@ -10,9 +10,9 @@ import { InjectModel } from '@nestjs/mongoose';
 export class DiscordService {
     private logger = new Logger(DiscordService.name)
 
-
     private readonly mongoOn = process.env.MONGO_ON === 'true'
     private readonly prodEnv = process.env.ENV_TYPE === 'PROD'
+    private readonly skipDiscord = process.env.SKIP_DISCORD === 'true'
 
     constructor(
         private readonly telegramService: TelegramService,
@@ -24,22 +24,39 @@ export class DiscordService {
     private readonly client: Client
     private readonly channels: Map<string, Channel> = new Map() //telegram channel id -> discord Channel
         
+    private initFlag = false
     async init() {
+        if (this.initFlag) {
+            return
+        }
+        this.initFlag = true
         await this.telegramService.initService()
+        if (this.skipDiscord) {
+            return
+        }
         await this.initChannels()
         this.subscribeForTelegramMessages()
         this.logger.log('Initialization completed')
     }
 
-    async sendMessage(message: Message, telegramChannelId: string) {
+    async sendMessage(message: TelegramMessage, telegramChannelId: string) {
         const channel: Channel = this.channels.get(telegramChannelId)
         if (channel instanceof TextChannel) {
-            await channel.send(message?.message)
+            if (message?.media?.photo) {
+                const bytes: Uint8Array = await this.telegramService.getPhoto(message)
+                const file = new AttachmentBuilder(Buffer.from(bytes))
+                const options: MessageCreateOptions = {
+                    content: message?.message,
+                    files: [file]
+                }
+                await channel.send(options)
+            } else {
+                await channel.send(message?.message)
+            }
             this.putLog(telegramChannelId, channel, message)
         } else {
             console.error('Channel is not a text channel')
         }
-
     }
 
     private async initChannels() {
@@ -81,7 +98,7 @@ this.logger.log(log)
 
 
     private subscribeForTelegramMessages(): void {
-        this.telegramService.channelsMessages$.subscribe((message: Message) => {
+        this.telegramService.channelsMessages$.subscribe((message: TelegramMessage) => {
             const telegramChannelId = message.peer_id?.channel_id
             if (telegramChannelId) {
                 this.sendMessage(message, telegramChannelId)
@@ -95,7 +112,7 @@ this.logger.log(log)
         const client = new Client({
             intents: [
                 GatewayIntentBits.Guilds,
-             GatewayIntentBits.GuildMessages
+                GatewayIntentBits.GuildMessages
             ],
         })
         client.once('ready', () => {
@@ -107,7 +124,7 @@ this.logger.log(log)
         return client
     }
 
-    private putLog(telegramChannelId: string, channel: Channel, message: Message) {
+    private putLog(telegramChannelId: string, channel: Channel, message: TelegramMessage) {
         if (!this.mongoOn || !this.prodEnv) {
             return
         }
@@ -116,7 +133,8 @@ this.logger.log(log)
             discordChannelId: channel?.['discordChannelId'],
             message: message?.message,
             timestamp: new Date(),
-            discordChannelName: channel?.['guild']?.['name']
+            discordChannelName: channel?.['guild']?.['name'],
+            telegramMessageId: message?.message?.['id']
         }).save()
     }
 

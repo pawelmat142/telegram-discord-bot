@@ -32,6 +32,10 @@ export class Log {
     @Prop()
     discordChannelName: string
 
+    @Expose()
+    @Prop()
+    telegramMessageId: string
+
 }
 
 export const LogSchema = SchemaFactory.createForClass(Log)

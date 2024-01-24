@@ -1,15 +1,18 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Logger } from '@nestjs/common';
 import { DiscordService } from './discord/discord.service';
 
 @Controller()
 export class AppController {
+
+  private readonly logger = new Logger(AppController.name)
+
   constructor(
-    private readonly discordService: DiscordService
+    private readonly discordService: DiscordService,
   ) {}
 
   @Get('test')
   getHello() {
-    console.log('test')
+    return this.logger.log('test')
   }
 
   @Get('log-channels')
