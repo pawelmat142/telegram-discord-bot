@@ -1,5 +1,6 @@
-import { Controller, Get, Logger } from '@nestjs/common';
+import { Body, Controller, Get, Logger, Param, Post } from '@nestjs/common';
 import { DiscordService } from './discord/discord.service';
+import { NewsService } from './news/news.service';
 
 @Controller()
 export class AppController {
@@ -8,11 +9,12 @@ export class AppController {
 
   constructor(
     private readonly discordService: DiscordService,
+    private readonly newsSerice: NewsService,
   ) {}
 
-  @Get('test')
-  getHello() {
-    return this.logger.log('test')
+  @Get('test/:name')
+  getHello(@Param('name') name: string) {
+    // return this.newsSerice.strike(name)
   }
 
   @Get('log-channels')
@@ -23,5 +25,22 @@ export class AppController {
   @Get('logs')
   getLogs() {
     return this.discordService.getLogs()
+  }
+
+
+  
+  @Get('news/strike/:name')
+  strikeNews(@Param('name') name: string) {
+    this.newsSerice.strikeByName(name)
+  }
+
+  @Get('news/reset/:name')
+  resetNewsIds(@Param('name') name: string) {
+    this.newsSerice.resetPreviousIds(name)
+  }
+
+  @Post('news/initialize')
+  initializeNews(@Body() data: any) {
+    this.newsSerice.initialize(data)
   }
 }

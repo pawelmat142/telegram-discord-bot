@@ -5,6 +5,8 @@ import { AttachmentBuilder, Channel, Client, GatewayIntentBits, MessageCreateOpt
 import { Log } from './log';
 import { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
+import { Subject } from 'rxjs';
+import { LogError } from './log-error';
 
 @Injectable()
 export class DiscordService {
@@ -17,9 +19,12 @@ export class DiscordService {
     constructor(
         private readonly telegramService: TelegramService,
         @InjectModel(Log.name) private logModel: Model<Log>,
+        @InjectModel(LogError.name) private logErrorModel: Model<LogError>,
     ) {
         this.client = this.initClient()
     }
+
+    public readonly initNews$ = new Subject<boolean>()
 
     private readonly client: Client
     private readonly channels: Map<string, Channel> = new Map() //telegram channel id -> discord Channel
@@ -31,32 +36,38 @@ export class DiscordService {
         }
         this.initFlag = true
         await this.telegramService.initService()
-        if (this.skipDiscord) {
-            return
-        }
-        await this.initChannels()
-        this.subscribeForTelegramMessages()
+        // TODO
+        // if (this.skipDiscord) {
+        //     return
+        // }
+        // await this.initChannels()
+        // this.subscribeForTelegramMessages()
+        // this.initNews$.next(true)
         this.logger.log('Initialization completed')
     }
 
     async sendMessage(message: TelegramMessage, telegramChannelId: string) {
         const channel: Channel = this.channels.get(telegramChannelId)
         if (channel instanceof TextChannel) {
-            if (message?.media?.photo) {
-                const bytes: Uint8Array = await this.telegramService.getPhoto(message)
-                const file = new AttachmentBuilder(Buffer.from(bytes))
-                const options: MessageCreateOptions = {
-                    content: message?.message,
-                    files: [file]
-                }
-                await channel.send(options)
-            } else {
-                await channel.send(message?.message)
+            const photoFile = await this.getMessagePhoto(message)
+            const options: MessageCreateOptions = {
+                content: message?.message,
+                files: photoFile ? [photoFile] : []
             }
+            await channel.send(options)
             this.putLog(telegramChannelId, channel, message)
         } else {
             console.error('Channel is not a text channel')
         }
+    }
+
+    private async getMessagePhoto(message: TelegramMessage): Promise<AttachmentBuilder | null> {
+        if (message?.media?.photo) {
+            const bytes: Uint8Array = await this.telegramService.getPhoto(message)
+            const file = new AttachmentBuilder(Buffer.from(bytes))
+            return file
+        }
+        return null
     }
 
     private async initChannels() {
@@ -96,17 +107,18 @@ this.logger.log(log)
 })
     }
 
-
     private subscribeForTelegramMessages(): void {
         this.telegramService.channelsMessages$.subscribe((message: TelegramMessage) => {
-            const telegramChannelId = message.peer_id?.channel_id
-            if (telegramChannelId) {
-                this.sendMessage(message, telegramChannelId)
+            try {
+                const telegramChannelId = message.peer_id?.channel_id
+                if (telegramChannelId) {
+                    this.sendMessage(message, telegramChannelId)
+                }
+            } catch (error) {
+                this.logError(error)
             }
         })
     }
-
-
 
     private initClient(): Client {
         const client = new Client({
@@ -143,6 +155,27 @@ this.logger.log(log)
             throw new UnsupportedMediaTypeException()
         }
         return this.logModel.find().exec()
+    }
+
+    public async sendMessageToChannel(message: string, channelId: string) {
+        try {
+            const channel = await this.client.channels.fetch(channelId)
+            if (channel instanceof TextChannel) {
+                await channel.send(message)
+            }
+            return message
+        } catch (error) {
+            console.error(error)
+            return null
+        }
+    }
+
+    private logError(error: string) {
+        return new this.logErrorModel({
+            error: error,
+            reason: 'Discord service',
+            timestamp: new Date
+        }).save()
     }
 
 }

@@ -5,6 +5,8 @@ import { TelegramModule } from './telegram/telegram.module';
 import { ConfigModule } from '@nestjs/config';
 import { AppDiscordModule } from './discord/discord.module';
 import { MongooseModule } from '@nestjs/mongoose';
+import { HttpModule } from '@nestjs/axios';
+import { NewsModule } from './news/news.module';
 
 const getMongoOrNot = () => {
   const result = []
@@ -16,11 +18,13 @@ const getMongoOrNot = () => {
 
 @Module({
   imports: [
+    HttpModule,
     ConfigModule.forRoot(),
     MongooseModule.forRoot(process.env.MONGO_URI),
     TelegramModule,
     AppDiscordModule,
-    ...getMongoOrNot()
+    ...getMongoOrNot(),
+    NewsModule
   ],
   controllers: [AppController],
   providers: [AppService],

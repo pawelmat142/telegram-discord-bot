@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { TelegramModule } from 'src/telegram/telegram.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Log, LogSchema } from './log';
+import { LogError, LogErrorSchema } from './log-error';
 
 @Module({
   imports: [
@@ -11,6 +12,9 @@ import { Log, LogSchema } from './log';
     MongooseModule.forFeature([{
       name: Log.name,
       schema: LogSchema
+    }, {
+      name: LogError.name,
+      schema: LogErrorSchema
     }]),
     TelegramModule
   ],

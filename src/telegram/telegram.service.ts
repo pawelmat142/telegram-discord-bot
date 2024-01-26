@@ -33,11 +33,34 @@ export class TelegramService {
             return
         }
         this.initFlag = true
+        // TODO
         this.initChannelIds()
         this.initMTProto()
         await this.auth(this.phoneNumber)
         this.subscribeToUpdates()
+
+        // this.test()
         this.logger.log(`Bot is listening for messages from channels: ${this.channelIds.join(", ")}`)
+    }
+
+    async test() {
+
+        await this.mtProto.setDefaultDc(4)
+        const { phone_code_hash } = await this.sendCode(this.phoneNumber)
+
+        console.log('phone_code_hash')
+        console.log(phone_code_hash)
+
+        console.log(process.env.TELEGRAM_2FA)
+
+
+        const res = await this.mtProto.call('auth.signIn', {
+            phone_number : this.phoneNumber,
+            phone_code_hash: phone_code_hash,
+            phone_code : process.env.TELEGRAM_2FA
+        }).catch(error => console.error(error))
+
+        console.log(res)
     }
 
     private initChannelIds() {
