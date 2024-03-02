@@ -1,12 +1,18 @@
-import { Injectable, Logger, UnsupportedMediaTypeException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { TelegramMessage as TelegramMessage } from 'src/telegram/message';
 import { TelegramService } from 'src/telegram/telegram.service';
 import { AttachmentBuilder, Channel, Client, GatewayIntentBits, MessageCreateOptions, TextChannel } from 'discord.js';
-import { Log } from './log';
 import { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { Subject } from 'rxjs';
 import { LogError } from './log-error';
+import { toDateString } from 'src/global/util';
+
+export interface MsgCtx {
+    message: TelegramMessage
+    telegramChannelId: string
+    logs: string[]
+}
 
 @Injectable()
 export class DiscordService {
@@ -14,11 +20,11 @@ export class DiscordService {
 
     private readonly mongoOn = process.env.MONGO_ON === 'true'
     private readonly prodEnv = process.env.ENV_TYPE === 'PROD'
+    private readonly testMode = process.env.TEST_MODE === 'true'
     private readonly skipDiscord = process.env.SKIP_DISCORD === 'true'
 
     constructor(
         private readonly telegramService: TelegramService,
-        @InjectModel(Log.name) private logModel: Model<Log>,
         @InjectModel(LogError.name) private logErrorModel: Model<LogError>,
     ) {
         this.client = this.initClient()
@@ -34,40 +40,77 @@ export class DiscordService {
         if (this.initFlag) {
             return
         }
+        this.logger.log('initializing...')
         this.initFlag = true
         await this.telegramService.initService()
         // TODO
-        // if (this.skipDiscord) {
-        //     return
-        // }
-        // await this.initChannels()
-        // this.subscribeForTelegramMessages()
-        // this.initNews$.next(true)
+        if (this.testMode) {
+            return
+        }
+        await this.initChannels()
+        this.subscribeForTelegramMessages()
+        this.initNews$.next(true)
         this.logger.log('Initialization completed')
     }
 
+
+
     async sendMessage(message: TelegramMessage, telegramChannelId: string) {
-        const channel: Channel = this.channels.get(telegramChannelId)
-        if (channel instanceof TextChannel) {
-            const photoFile = await this.getMessagePhoto(message)
-            const options: MessageCreateOptions = {
-                content: message?.message,
-                files: photoFile ? [photoFile] : []
-            }
-            await channel.send(options)
-            this.putLog(telegramChannelId, channel, message)
-        } else {
-            console.error('Channel is not a text channel')
+        const ctx: MsgCtx = {
+            telegramChannelId: telegramChannelId,
+            message: message,
+            logs: []
+        }
+        try {
+            this._sendMessage(ctx)
+            this.addLog('Message send', ctx)
+        } catch (error) {
+            this.addError(`while sending message`, ctx, error)
+            this.logError(error, telegramChannelId, ctx)
         }
     }
 
-    private async getMessagePhoto(message: TelegramMessage): Promise<AttachmentBuilder | null> {
-        if (message?.media?.photo) {
-            const bytes: Uint8Array = await this.telegramService.getPhoto(message)
-            const file = new AttachmentBuilder(Buffer.from(bytes))
-            return file
+
+    private async _sendMessage(ctx: MsgCtx) {
+        if (!ctx.telegramChannelId) {
+            throw new Error(`telegramChannelId not found`)
         }
-        return null
+        const channel: Channel = this.channels.get(ctx.telegramChannelId)
+        if (!(channel instanceof TextChannel)) {
+            throw new Error(`Channel is not a text channel`)
+        }
+        if (this.skipDiscord) return
+        
+        const photoFile = await this.getMessagePhoto(ctx)
+
+        const options: MessageCreateOptions = {
+            content: this.prepareMessageSeparator(ctx.message?.message),
+            files: photoFile ? [photoFile] : undefined
+        }
+
+        await channel.send(options)
+    }
+
+
+    // TODO clean logs
+    private prepareMessageSeparator(msg: string): string {
+        const separator = ":mushroom: :mushroom: :mushroom:\n"
+        return separator + msg
+    }
+
+    private async getMessagePhoto(ctx: MsgCtx): Promise<AttachmentBuilder | null> {
+        try {
+            if (ctx.message?.media?.photo) {
+                const bytes: Uint8Array = await this.telegramService.getPhoto(ctx.message)
+                const file = new AttachmentBuilder(Buffer.from(bytes))
+                this.addLog('Photo file found', ctx)
+                return file
+            }
+            this.addLog('Photo file not found', ctx)
+        } catch (error) {
+            this.addError(`Error while getting msg photo`, ctx, error)
+            return null
+        }
     }
 
     private async initChannels() {
@@ -97,26 +140,21 @@ export class DiscordService {
 
     public logChannels() {
         this.channels.forEach((channel, key) => {
-            const log = `
-TELEGRAM_CHANNEL_ID: ${key}
-NAME: ${(channel?.['guild']?.['name'])}
-DISCORD_CHANNEL_ID: ${channel['discordChannelId']}
-DISCORD_NAME: ${(channel?.['name'])}
-`
-this.logger.log(log)
-})
+            const lines = [
+                `TELEGRAM_CHANNEL_ID: ${key}`,
+                `NAME: ${(channel?.['guild']?.['name'])}`,
+                `DISCORD_CHANNEL_ID: ${channel['discordChannelId']}`,
+                `DISCORD_NAME: ${(channel?.['name'])}`
+            ]
+            const msg =(lines || []).reduce((acc, line) => acc + line + '\n', '')
+            this.logger.log(msg)
+        })
     }
 
     private subscribeForTelegramMessages(): void {
         this.telegramService.channelsMessages$.subscribe((message: TelegramMessage) => {
-            try {
-                const telegramChannelId = message.peer_id?.channel_id
-                if (telegramChannelId) {
-                    this.sendMessage(message, telegramChannelId)
-                }
-            } catch (error) {
-                this.logError(error)
-            }
+            const telegramChannelId = message.peer_id?.channel_id
+            this.sendMessage(message, telegramChannelId)
         })
     }
 
@@ -136,26 +174,6 @@ this.logger.log(log)
         return client
     }
 
-    private putLog(telegramChannelId: string, channel: Channel, message: TelegramMessage) {
-        if (!this.mongoOn || !this.prodEnv) {
-            return
-        }
-        return new this.logModel({
-            telegramChannelId: telegramChannelId,
-            discordChannelId: channel?.['discordChannelId'],
-            message: message?.message,
-            timestamp: new Date(),
-            discordChannelName: channel?.['guild']?.['name'],
-            telegramMessageId: message?.message?.['id']
-        }).save()
-    }
-
-    public getLogs() {
-        if (!this.mongoOn) {
-            throw new UnsupportedMediaTypeException()
-        }
-        return this.logModel.find().exec()
-    }
 
     public async sendMessageToChannel(message: string, channelId: string) {
         try {
@@ -165,17 +183,33 @@ this.logger.log(log)
             }
             return message
         } catch (error) {
-            console.error(error)
+            this.logError(error)
             return null
         }
     }
 
-    private logError(error: string) {
+
+    private logError(error: string, telegramChannelId?: string, ctx?: MsgCtx) {
+        this.logger.error(error)
         return new this.logErrorModel({
             error: error,
             reason: 'Discord service',
-            timestamp: new Date
+            timestamp: new Date,
+            telegramChannelId: telegramChannelId,
+            logs: ctx.logs
         }).save()
     }
 
+
+    private addLog(log: string, ctx: MsgCtx, prefix?: string) {
+        const _prefix = prefix ? `${prefix} ` : ''
+        const _log = `[${toDateString(new Date())}] ${_prefix}- ${log}`
+        ctx.logs.push(_log)
+        this.logger.log(_log)
+    }
+
+    private addError(msg: string, ctx: MsgCtx, error?: any) {
+        this.addLog(msg, ctx, '[ERROR]')
+    }
+    
 }

@@ -7,24 +7,22 @@ import { AppDiscordModule } from './discord/discord.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { HttpModule } from '@nestjs/axios';
 import { NewsModule } from './news/news.module';
-
-const getMongoOrNot = () => {
-  const result = []
-  if (process.env.MONGO_ON === 'true') {
-    result.push(MongooseModule.forRoot(process.env.MONGO_URI))
-  }
-  return result
-}
+import { LogError, LogErrorSchema } from './discord/log-error';
+import { SignalModule } from './signal/signal.module';
 
 @Module({
   imports: [
     HttpModule,
     ConfigModule.forRoot(),
     MongooseModule.forRoot(process.env.MONGO_URI),
+    MongooseModule.forFeature([{
+      name: LogError.name,
+      schema: LogErrorSchema
+    }]),
     TelegramModule,
     AppDiscordModule,
-    ...getMongoOrNot(),
-    NewsModule
+    NewsModule,
+    SignalModule,
   ],
   controllers: [AppController],
   providers: [AppService],

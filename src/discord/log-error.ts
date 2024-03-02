@@ -20,6 +20,18 @@ export class LogError {
     @Prop()
     reason: string
 
+    @Expose()
+    @Prop()
+    telegramChannelId?: string
+
+    @Expose()
+    @Prop()
+    discordChannelId?: string
+
+    @Expose()
+    @Prop()
+    logs?: string[]
+
 }
 
 export const LogErrorSchema = SchemaFactory.createForClass(LogError)

@@ -4,6 +4,8 @@ import * as MTProto from '@mtproto/core';
 import * as path from 'path';
 import * as prompt from 'prompt';
 import { TelegramMessage, Photo } from './message';
+import { SignalService } from 'src/signal/signal.service';
+import { DuplicateService } from './duplicate.service';
 
 // https://www.youtube.com/watch?v=TRNeRySFtg0
 
@@ -17,10 +19,13 @@ export class TelegramService {
     private readonly phoneNumber = process.env.TELEGRAM_PHONE_NUMBER
     private readonly channelIds: string[] = []
 
+    private readonly testMode = process.env.TEST_MODE === 'true'
+
     private mtProto: MTProto
 
     constructor(
-        // private readonly httpService: HttpService
+        private readonly signalService: SignalService,
+        private readonly duplicateService: DuplicateService
     ) {}
 
     private _channelsMessages$ = new Subject<TelegramMessage>()
@@ -33,35 +38,15 @@ export class TelegramService {
             return
         }
         this.initFlag = true
-        // TODO
         this.initChannelIds()
         this.initMTProto()
-        await this.auth(this.phoneNumber)
-        this.subscribeToUpdates()
-
-        // this.test()
+        if (!this.testMode) {
+            await this.auth(this.phoneNumber)
+            this.subscribeToUpdates()
+        }
         this.logger.log(`Bot is listening for messages from channels: ${this.channelIds.join(", ")}`)
     }
 
-    async test() {
-
-        await this.mtProto.setDefaultDc(4)
-        const { phone_code_hash } = await this.sendCode(this.phoneNumber)
-
-        console.log('phone_code_hash')
-        console.log(phone_code_hash)
-
-        console.log(process.env.TELEGRAM_2FA)
-
-
-        const res = await this.mtProto.call('auth.signIn', {
-            phone_number : this.phoneNumber,
-            phone_code_hash: phone_code_hash,
-            phone_code : process.env.TELEGRAM_2FA
-        }).catch(error => console.error(error))
-
-        console.log(res)
-    }
 
     private initChannelIds() {
         var iterator = 1
@@ -104,18 +89,31 @@ export class TelegramService {
 
     private subscribeToUpdates(): void {
         this.mtProto.updates.on('updates', (updateInfo) => {
-            updateInfo.updates.forEach((update) => {
+            updateInfo.updates.forEach(async (update) => {
                 const message = update?.message as TelegramMessage
                 if (message) {
-                    const updateChannelId = message.peer_id?.channel_id
-                    if (this.channelIds.includes(updateChannelId)) {
-                        this._channelsMessages$.next(message)
+                    if (!message?.message) {
+                        return
                     }
+                    this.signalService.processIfSignal(message)
+                    this.forwardIfNotDuplicate(message)
                 }
             })
         })
     }
-    
+
+    private async forwardIfNotDuplicate(message: TelegramMessage) {
+        const updateChannelId = message.peer_id?.channel_id
+        if (this.channelIds.includes(updateChannelId)) {
+            const isDuplicate = await this.duplicateService.messageIsDuplicate(message)
+            if (!isDuplicate) {
+                this._channelsMessages$.next(message)
+                this.duplicateService.saveMessage(message)
+            } else {
+                this.logger.debug('Prevented duplicate')
+            }
+        }
+    }
 
     private sendCode(mobile: string): Promise<any> {
         return this.mtProto.call('auth.sendCode', {

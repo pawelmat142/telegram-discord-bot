@@ -23,11 +23,8 @@ npm run build
 TELEGRAM_API_ID=<api_id>
 TELEGRAM_API_HASH=<api_hash>
 TELEGRAM_PHONE_NUMBER=<phone_number>
-
-DISCORD_BOT_TOKEN=<bot_token>
 ```
 * to get api_id and api_hash go to (https://my.telegram.org/auth) ->  "API development tools" -> fill form
-* to get bot_token for discord: (https://discordgsm.com/guide/how-to-get-a-discord-bot-token)
 
 * to .env file also provide channel id pairs like:
 ```bash

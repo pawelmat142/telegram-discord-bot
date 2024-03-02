@@ -22,12 +22,6 @@ export class AppController {
     return this.discordService.logChannels()
   }
 
-  @Get('logs')
-  getLogs() {
-    return this.discordService.getLogs()
-  }
-
-
   
   @Get('news/strike/:name')
   strikeNews(@Param('name') name: string) {

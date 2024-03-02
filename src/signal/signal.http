@@ -1,0 +1,18 @@
+### listSignals
+GET http://localhost:8008/signal/list
+
+### listValid
+GET http://localhost:8008/signal/list-valid
+
+
+### getLogs
+GET http://localhost:8008/logs
+
+
+### test
+GET http://localhost:8008/signal/test
+
+
+### send-test-message
+GET http://localhost:8008/signal/send-test-message
+
