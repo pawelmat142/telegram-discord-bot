@@ -3,9 +3,10 @@ import { Subject } from 'rxjs';
 import * as MTProto from '@mtproto/core';
 import * as path from 'path';
 import * as prompt from 'prompt';
-import { TelegramMessage, Photo } from './message';
+import { TelegramMessage, Photo } from './telegram-message';
 import { SignalService } from 'src/signal/signal.service';
 import { DuplicateService } from './duplicate.service';
+import { TelegramMessageRepo } from './telegram-message.repo';
 
 // https://www.youtube.com/watch?v=TRNeRySFtg0
 
@@ -25,7 +26,8 @@ export class TelegramService {
 
     constructor(
         private readonly signalService: SignalService,
-        private readonly duplicateService: DuplicateService
+        private readonly duplicateService: DuplicateService,
+        private readonly telegramMessageRepo: TelegramMessageRepo,
     ) {}
 
     private _channelsMessages$ = new Subject<TelegramMessage>()
@@ -92,6 +94,7 @@ export class TelegramService {
             updateInfo.updates.forEach(async (update) => {
                 const message = update?.message as TelegramMessage
                 if (message) {
+                    this.telegramMessageRepo.save(message)
                     if (!message?.message) {
                         return
                     }

@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
-import { TelegramMessage } from 'src/telegram/message';
 import { HttpService } from '@nestjs/axios';
 import { lastValueFrom } from 'rxjs';
 import { LogError } from 'src/discord/log-error';
+import { TelegramMessage } from 'src/telegram/telegram-message';
 
 @Injectable()
 export class SignalService {

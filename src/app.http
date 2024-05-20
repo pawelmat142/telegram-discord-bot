@@ -10,20 +10,20 @@ GET http://localhost:8008/logs
 
 
 ### strikeNews
-GET http://localhost:8008/news/strike/altcoins
+GET http://localhost:8008/news/strike/nft
 
 ### resetNews
-GET http://localhost:8008/news/reset/altcoins
+GET http://localhost:8008/news/reset/defi
 
 ### initializeNews
 POST http://localhost:8008/news/initialize
 Content-Type: application/json
 
 {
-    "name": "altcoins",
-    "regex": "/\\/news\\/altcoins\\/(\\d+)\\//g",
-    "baseUrl": "https://cryptonews.net/news/altcoins/",
-    "discordChannelId": "1196789976831115318"
+    "name": "nft",
+    "regex": "/\\/news\\/nft\\/(\\d+)\\//g",
+    "baseUrl": "https://cryptonews.net/news/nft/",
+    "discordChannelId": "1196790102093987931"
 }
 
 

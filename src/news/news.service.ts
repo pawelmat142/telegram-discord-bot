@@ -56,7 +56,7 @@ export class NewsService implements OnModuleInit{
         this.logger.log(`Found new ids: ${newIds.length} for ${newsData.name}`)
         for (let i = 0; i < newIds.length; i++) {
             const message = url + newIds[i]
-            this.logger.log(`forwarding bitcoin news message ${newIds[i]}`)
+            this.logger.log(`forwarding ${newsData.name} news message ${newIds[i]}`)
             this.discordService.sendMessageToChannel(message, newsData.discordChannelId)
         }
         if (newIds.length) {

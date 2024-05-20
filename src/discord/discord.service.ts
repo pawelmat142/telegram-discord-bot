@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { TelegramMessage as TelegramMessage } from 'src/telegram/message';
 import { TelegramService } from 'src/telegram/telegram.service';
 import { AttachmentBuilder, Channel, Client, GatewayIntentBits, MessageCreateOptions, TextChannel } from 'discord.js';
 import { Model } from 'mongoose';
@@ -7,6 +6,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Subject } from 'rxjs';
 import { LogError } from './log-error';
 import { toDateString } from 'src/global/util';
+import { TelegramMessage } from 'src/telegram/telegram-message';
 
 export interface MsgCtx {
     message: TelegramMessage
@@ -92,7 +92,6 @@ export class DiscordService {
     }
 
 
-    // TODO clean logs
     private prepareMessageSeparator(msg: string): string {
         const separator = ":mushroom: :mushroom: :mushroom:\n"
         return separator + msg
