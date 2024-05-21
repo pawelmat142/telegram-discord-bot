@@ -24,6 +24,7 @@ export class SignalService {
                     this.logger.log('Posted signal message to binance bot! ')
                 } catch (error) {
                     const errorMessage = error?.response?.data?.message ?? error
+                    this.logger.error(`When processing signal message`)
                     this.logger.error(errorMessage)
                 }
             }

@@ -18,7 +18,7 @@ export class TelegramService {
     private readonly api_id = parseInt(process.env.TELEGRAM_API_ID)
     private readonly api_hash = process.env.TELEGRAM_API_HASH
     private readonly phoneNumber = process.env.TELEGRAM_PHONE_NUMBER
-    private readonly channelIds: string[] = []
+    private readonly telegramChannelIds: string[] = []
 
     private readonly testMode = process.env.TEST_MODE === 'true'
 
@@ -46,7 +46,7 @@ export class TelegramService {
             await this.auth(this.phoneNumber)
             this.subscribeToUpdates()
         }
-        this.logger.log(`Bot is listening for messages from channels: ${this.channelIds.join(", ")}`)
+        this.logger.log(`Bot is listening for messages from channels: ${this.telegramChannelIds.join(", ")}`)
     }
 
 
@@ -56,10 +56,10 @@ export class TelegramService {
         do {
             channelId = process.env[`TELEGRAM_CHANNEL_ID_${iterator}`]
             if (channelId) {
-                this.channelIds.push(channelId)
+                this.telegramChannelIds.push(channelId)
             } else break
         } while(iterator++)
-        if (!this.channelIds.length) throw new Error('Not found any channel id')
+        if (!this.telegramChannelIds.length) throw new Error('Not found any channel id')
     }
 
     private initMTProto(): void {
@@ -94,10 +94,16 @@ export class TelegramService {
             updateInfo.updates.forEach(async (update) => {
                 const message = update?.message as TelegramMessage
                 if (message) {
-                    this.logger.log(`Received message with id: ${message.id}, telegramChannelId: ${message.peer_id?.channel_id}`)
-                    this.telegramMessageRepo.save(message)
+                    const telegramChannelId = message.peer_id?.channel_id || message.peer_id?.user_id
+                    this.logger.log(`Received message with id: ${message.id}, from telegram: ${telegramChannelId}`)
                     if (!message?.message) {
                         this.logger.log(`Message with id: ${message.id}, has no content message`)
+                        return
+                    }
+                    this.telegramMessageRepo.save(message)
+                    if (message?.message) {
+                        this.logger.log(message?.message)
+                    } else {
                         return
                     }
                     this.signalService.processIfSignal(message)
@@ -108,8 +114,12 @@ export class TelegramService {
     }
 
     private async forwardIfNotDuplicate(message: TelegramMessage) {
-        const updateChannelId = message.peer_id?.channel_id
-        if (this.channelIds.includes(updateChannelId)) {
+        const telegramUpdateChannelId = message.peer_id?.channel_id
+        if (this.telegramChannelIds.includes(telegramUpdateChannelId)) {
+            this.telegramMessageRepo.save(message)
+            if (message?.message) {
+                this.logger.log(message?.message)
+            }
             const isDuplicate = await this.duplicateService.messageIsDuplicate(message)
             if (!isDuplicate) {
                 this._channelsMessages$.next(message)

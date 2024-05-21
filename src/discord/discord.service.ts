@@ -2,12 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { TelegramService } from 'src/telegram/telegram.service';
 import { AttachmentBuilder, Channel, Client, GatewayIntentBits, MessageCreateOptions, TextChannel } from 'discord.js';
 import { Subject } from 'rxjs';
-import { toDateString } from 'src/global/util';
 import { TelegramMessage } from 'src/telegram/telegram-message';
 
 export interface MsgCtx {
     message: TelegramMessage
     telegramChannelId: string
+    discordChannel: TextChannel
 }
 
 @Injectable()
@@ -36,7 +36,7 @@ export class DiscordService {
         if (this.initFlag) {
             return
         }
-        this.logger.log('initializing...')
+        this.logger.log('[START] Initialization')
         this.initFlag = true
         await this.telegramService.initService()
         // TODO
@@ -46,25 +46,35 @@ export class DiscordService {
         await this.initChannels()
         this.subscribeForTelegramMessages()
         this.initNews$.next(true)
-        this.logger.log('Initialization completed')
+        this.logger.log('[STOP] Initialization')
     }
 
 
-    async sendMessage(message: TelegramMessage, telegramChannelId: string) {
+    async sendMessage(message: TelegramMessage) {
         if (process.env.SKIP_DISCORD === 'true') {
             this.logger.debug(`SKIP DISCORD`)
             return
         }
+        const telegramChannelId = message.peer_id?.channel_id
+        const channel: Channel = this.channels.get(telegramChannelId)
+        const discordChannelId = channel['discordChannelId']
+
+        if (!(channel instanceof TextChannel)) {
+            this.logger.error(`Channel ${discordChannelId} is not a text channel`)
+            return
+        }
+
         const ctx: MsgCtx = {
-            telegramChannelId: telegramChannelId,
+            telegramChannelId: message.peer_id?.channel_id,
             message: message,
+            discordChannel: channel
         }
         try {
             this._sendMessage(ctx)
-            this.logger.log(`Sent message ${message.id} from telegram: ${telegramChannelId}`)
+            this.logger.log(`Send message ${message.id} from telegram: ${message.peer_id?.channel_id} to discord: ${discordChannelId}`)
         } 
         catch (error) {
-            this.logger.error(`Error sending message from telegram: ${telegramChannelId}`)
+            this.logger.error(`Error sending message from telegram: ${message.peer_id?.channel_id} to discord: ${discordChannelId}`)
             this.logger.error(error)
         }
     }
@@ -73,10 +83,6 @@ export class DiscordService {
     private async _sendMessage(ctx: MsgCtx) {
         if (!ctx.telegramChannelId) {
             throw new Error(`telegramChannelId not found`)
-        }
-        const channel: Channel = this.channels.get(ctx.telegramChannelId)
-        if (!(channel instanceof TextChannel)) {
-            throw new Error(`Channel is not a text channel`)
         }
         if (this.skipDiscord) return
         
@@ -87,7 +93,7 @@ export class DiscordService {
             files: photoFile ? [photoFile] : undefined
         }
 
-        await channel.send(options)
+        await ctx.discordChannel.send(options)
     }
 
 
@@ -153,10 +159,7 @@ export class DiscordService {
 
     private subscribeForTelegramMessages(): void {
         this.telegramService.channelsMessages$.subscribe((message: TelegramMessage) => {
-            const telegramChannelId = message.peer_id?.channel_id
-            this.logger.log(`Received message ${message.id} from telegram: ${telegramChannelId}`)
-            this.logger.log(message?.message)
-            this.sendMessage(message, telegramChannelId)
+            this.sendMessage(message)
         })
     }
 
@@ -185,6 +188,7 @@ export class DiscordService {
             }
             return message
         } catch (error) {
+            this.logger.error(`When sending message to discord: ${channelId}`)
             this.logger.error(error)
             return null
         }

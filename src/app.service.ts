@@ -4,9 +4,4 @@ import { Injectable } from '@nestjs/common';
 export class AppService {
 
 
-
-    test() {
-        console.log('test')
-    }
-
 }
