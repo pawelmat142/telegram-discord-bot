@@ -10,12 +10,14 @@ import { Cron } from '@nestjs/schedule';
 @Injectable()
 export class NewsService implements OnModuleInit{
 
-    private readonly logger = new Logger(NewsService.name)
+    // private readonly logger = new Logger(NewsService.name)
 
     constructor(
         @InjectModel(News.name) private newsModel: Model<News>,
         private readonly httpService: HttpService,
         private readonly discordService: DiscordService,
+
+        private readonly logger: Logger
     ) {}
 
     async onModuleInit() {

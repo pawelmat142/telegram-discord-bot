@@ -17,12 +17,6 @@ export class AppController {
     // return this.newsSerice.strike(name)
   }
 
-  @Get('log-channels')
-  logChannels() {
-    return this.discordService.logChannels()
-  }
-
-  
   @Get('news/strike/:name')
   strikeNews(@Param('name') name: string) {
     this.newsSerice.strikeByName(name)

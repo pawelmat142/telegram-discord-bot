@@ -1,22 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { TelegramService } from 'src/telegram/telegram.service';
 import { AttachmentBuilder, Channel, Client, GatewayIntentBits, MessageCreateOptions, TextChannel } from 'discord.js';
-import { Model } from 'mongoose';
-import { InjectModel } from '@nestjs/mongoose';
 import { Subject } from 'rxjs';
-import { LogError } from './log-error';
 import { toDateString } from 'src/global/util';
 import { TelegramMessage } from 'src/telegram/telegram-message';
 
 export interface MsgCtx {
     message: TelegramMessage
     telegramChannelId: string
-    logs: string[]
 }
 
 @Injectable()
 export class DiscordService {
-    private logger = new Logger(DiscordService.name)
+
+    private readonly logger = new Logger(DiscordService.name)
 
     private readonly mongoOn = process.env.MONGO_ON === 'true'
     private readonly prodEnv = process.env.ENV_TYPE === 'PROD'
@@ -25,7 +22,6 @@ export class DiscordService {
 
     constructor(
         private readonly telegramService: TelegramService,
-        @InjectModel(LogError.name) private logErrorModel: Model<LogError>,
     ) {
         this.client = this.initClient()
     }
@@ -54,19 +50,22 @@ export class DiscordService {
     }
 
 
-
     async sendMessage(message: TelegramMessage, telegramChannelId: string) {
+        if (process.env.SKIP_DISCORD === 'true') {
+            this.logger.debug(`SKIP DISCORD`)
+            return
+        }
         const ctx: MsgCtx = {
             telegramChannelId: telegramChannelId,
             message: message,
-            logs: []
         }
         try {
             this._sendMessage(ctx)
-            this.addLog('Message send', ctx)
-        } catch (error) {
-            this.addError(`while sending message`, ctx, error)
-            this.logError(error, telegramChannelId, ctx)
+            this.logger.log(`Sent message ${message.id} from telegram: ${telegramChannelId}`)
+        } 
+        catch (error) {
+            this.logger.error(`Error sending message from telegram: ${telegramChannelId}`)
+            this.logger.error(error)
         }
     }
 
@@ -98,16 +97,18 @@ export class DiscordService {
     }
 
     private async getMessagePhoto(ctx: MsgCtx): Promise<AttachmentBuilder | null> {
+        const telegramChannelId = ctx.message?.peer_id?.channel_id
         try {
             if (ctx.message?.media?.photo) {
                 const bytes: Uint8Array = await this.telegramService.getPhoto(ctx.message)
                 const file = new AttachmentBuilder(Buffer.from(bytes))
-                this.addLog('Photo file found', ctx)
+                this.logger.debug(`Photo file found in message: ${ctx.message.id}, telegram: ${telegramChannelId}`)
                 return file
             }
-            this.addLog('Photo file not found', ctx)
+            this.logger.log(`Not found photo file in message ${ctx.message.id} telegram: ${telegramChannelId}`)
         } catch (error) {
-            this.addError(`Error while getting msg photo`, ctx, error)
+            this.logger.error(`Error getting msg photo ${ctx.message.id} telegram: ${telegramChannelId}`)
+            this.logger.error(error)
             return null
         }
     }
@@ -137,7 +138,7 @@ export class DiscordService {
         }
     }
 
-    public logChannels() {
+    private logChannels() {
         this.channels.forEach((channel, key) => {
             const lines = [
                 `TELEGRAM_CHANNEL_ID: ${key}`,
@@ -153,6 +154,8 @@ export class DiscordService {
     private subscribeForTelegramMessages(): void {
         this.telegramService.channelsMessages$.subscribe((message: TelegramMessage) => {
             const telegramChannelId = message.peer_id?.channel_id
+            this.logger.log(`Received message ${message.id} from telegram: ${telegramChannelId}`)
+            this.logger.log(message?.message)
             this.sendMessage(message, telegramChannelId)
         })
     }
@@ -182,33 +185,10 @@ export class DiscordService {
             }
             return message
         } catch (error) {
-            this.logError(error)
+            this.logger.error(error)
             return null
         }
     }
 
 
-    private logError(error: string, telegramChannelId?: string, ctx?: MsgCtx) {
-        this.logger.error(error)
-        return new this.logErrorModel({
-            error: error,
-            reason: 'Discord service',
-            timestamp: new Date,
-            telegramChannelId: telegramChannelId,
-            logs: ctx.logs
-        }).save()
-    }
-
-
-    private addLog(log: string, ctx: MsgCtx, prefix?: string) {
-        const _prefix = prefix ? `${prefix} ` : ''
-        const _log = `[${toDateString(new Date())}] ${_prefix}- ${log}`
-        ctx.logs.push(_log)
-        this.logger.log(_log)
-    }
-
-    private addError(msg: string, ctx: MsgCtx, error?: any) {
-        this.addLog(msg, ctx, '[ERROR]')
-    }
-    
 }

@@ -1,9 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Model } from 'mongoose';
-import { InjectModel } from '@nestjs/mongoose';
 import { HttpService } from '@nestjs/axios';
 import { lastValueFrom } from 'rxjs';
-import { LogError } from 'src/discord/log-error';
 import { TelegramMessage } from 'src/telegram/telegram-message';
 
 @Injectable()
@@ -16,13 +13,8 @@ export class SignalService {
     private readonly signalTelegramChannelId = process.env.SIGNAL_TELEGRAM_CHANNEL_ID
 
     constructor(
-        @InjectModel(LogError.name) private logErrorModel: Model<LogError>,
         private readonly http: HttpService
     ) {}
-
-    test() {
-        console.log(this.test)
-    }
 
     async processIfSignal(message: TelegramMessage) {
         if (this.isSignalTelegramMessage(message)) {
@@ -33,13 +25,6 @@ export class SignalService {
                 } catch (error) {
                     const errorMessage = error?.response?.data?.message ?? error
                     this.logger.error(errorMessage)
-                    new this.logErrorModel({
-                        telegramChannelId: 'BINANCE',
-                        discordChannelId: 'BINANCE',
-                        reason: 'BINANCE',
-                        error: errorMessage,
-                        timestamp: new Date()
-                    }).save()
                 }
             }
         }

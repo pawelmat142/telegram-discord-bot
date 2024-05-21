@@ -94,8 +94,10 @@ export class TelegramService {
             updateInfo.updates.forEach(async (update) => {
                 const message = update?.message as TelegramMessage
                 if (message) {
+                    this.logger.log(`Received message with id: ${message.id}, telegramChannelId: ${message.peer_id?.channel_id}`)
                     this.telegramMessageRepo.save(message)
                     if (!message?.message) {
+                        this.logger.log(`Message with id: ${message.id}, has no content message`)
                         return
                     }
                     this.signalService.processIfSignal(message)
@@ -113,7 +115,7 @@ export class TelegramService {
                 this._channelsMessages$.next(message)
                 this.duplicateService.saveMessage(message)
             } else {
-                this.logger.debug('Prevented duplicate')
+                this.logger.debug(`Prevented duplicate for message ${message.id}`)
             }
         }
     }

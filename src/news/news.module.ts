@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { NewsService } from './news.service';
 import { MongooseModule } from '@nestjs/mongoose';
 import { News, NewsSchema } from './news';
@@ -16,7 +16,7 @@ import { ScheduleModule } from '@nestjs/schedule';
       schema: NewsSchema
     }]),
   ],
-  providers: [NewsService],
+  providers: [NewsService, Logger],
   exports: [NewsService]
 })
 export class NewsModule {}

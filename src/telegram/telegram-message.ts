@@ -44,10 +44,4 @@ export class TelegramMessage {
 
     @Prop() media: MessageMedia
 }
-
-
-
-
-
-
 export const TelegramMessageSchema = SchemaFactory.createForClass(TelegramMessage)
