@@ -3,7 +3,6 @@ import { HydratedDocument } from "mongoose"
 
 export type TelegramMessageDocuments = HydratedDocument<TelegramMessage>
 
-@Schema()
 export class Photo {
     @Prop() has_stickers: boolean
     @Prop() id: string
@@ -16,20 +15,22 @@ export class Photo {
     @Prop() file_id: string
 }
 
-@Schema()
 export class PeerUser {
+    @Prop() _: string
     @Prop() user_id: number
     @Prop() channel_id: string
 }
 
-@Schema()
 export class MessageMedia {
     @Prop() photo: Photo
 }
 
+export type TelegramMessageType = 'message'
 
 @Schema()
 export class TelegramMessage {
+
+    _: TelegramMessageType
 
     @Prop() date: number
     @Prop() message: string
@@ -44,4 +45,5 @@ export class TelegramMessage {
 
     @Prop() media: MessageMedia
 }
+
 export const TelegramMessageSchema = SchemaFactory.createForClass(TelegramMessage)

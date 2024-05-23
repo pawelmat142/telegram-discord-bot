@@ -7,13 +7,14 @@ import { TelegramMessage, Photo } from './telegram-message';
 import { SignalService } from 'src/signal/signal.service';
 import { DuplicateService } from './duplicate.service';
 import { TelegramMessageRepo } from './telegram-message.repo';
+import { TelegramUpdateInfo, UpdateNewMessage, updateNewMessage, UpdateReadHistoryOutbox } from './interfaces';
 
 // https://www.youtube.com/watch?v=TRNeRySFtg0
 
 @Injectable()
 export class TelegramService {
     
-    private logger = new Logger(TelegramService.name)
+    private readonly logger = new Logger(TelegramService.name)
 
     private readonly api_id = parseInt(process.env.TELEGRAM_API_ID)
     private readonly api_hash = process.env.TELEGRAM_API_HASH
@@ -90,45 +91,40 @@ export class TelegramService {
     }
 
     private subscribeToUpdates(): void {
-        this.mtProto.updates.on('updates', (updateInfo) => {
-            updateInfo.updates.forEach(async (update) => {
-                const message = update?.message as TelegramMessage
-                if (message) {
-                    const telegramChannelId = message.peer_id?.channel_id || message.peer_id?.user_id
-                    this.logger.log(`Received message with id: ${message.id}, from telegram: ${telegramChannelId}`)
-                    if (!message?.message) {
-                        this.logger.log(`Message with id: ${message.id}, has no content message`)
-                        return
+        this.mtProto.updates.on('updates', (updateInfo: TelegramUpdateInfo) => {
+            updateInfo.updates.forEach(async (update: UpdateNewMessage | UpdateReadHistoryOutbox) => {
+                if (update._ === updateNewMessage) {
+                    const message = update?.message as TelegramMessage
+                    if (message) {
+                        this.onMessage(message)
                     }
-                    this.telegramMessageRepo.save(message)
-                    if (message?.message) {
-                        this.logger.log(message?.message)
-                    } else {
-                        return
-                    }
-                    this.signalService.processIfSignal(message)
-                    this.forwardIfNotDuplicate(message)
                 }
             })
         })
     }
 
-    private async forwardIfNotDuplicate(message: TelegramMessage) {
-        const telegramUpdateChannelId = message.peer_id?.channel_id
-        if (this.telegramChannelIds.includes(telegramUpdateChannelId)) {
+    private async onMessage(message: TelegramMessage) {
+        const telegramChannelId = message.peer_id?.channel_id || message.peer_id?.user_id.toString()
+        if (this.telegramChannelIds.includes(telegramChannelId)) {
             this.telegramMessageRepo.save(message)
-            if (message?.message) {
-                this.logger.log(message?.message)
+
+            this.logger.log(`Received message with id: ${message.id}, from telegram: ${telegramChannelId}`)
+            if (!message?.message) {
+                this.logger.log(`Message with id: ${message.id}, has no content message`)
+                return
             }
-            const isDuplicate = await this.duplicateService.messageIsDuplicate(message)
-            if (!isDuplicate) {
-                this._channelsMessages$.next(message)
-                this.duplicateService.saveMessage(message)
-            } else {
-                this.logger.debug(`Prevented duplicate for message ${message.id}`)
+            this.logger.debug(message?.message)
+
+            if (this.duplicateService.telegramMessageIdDuplicated(message)) {
+                this.logger.warn(`Telegram message with id [${message.id}] duplicate PREVENTED`)
+                return
             }
+
+            this.signalService.processIfSignal(message)
+            this._channelsMessages$.next(message)
         }
     }
+
 
     private sendCode(mobile: string): Promise<any> {
         return this.mtProto.call('auth.sendCode', {

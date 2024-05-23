@@ -1,30 +1,26 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { TelegramMessage } from "./telegram-message";
-import { Cron, CronExpression } from "@nestjs/schedule";
 
 @Injectable()
 export class DuplicateService {
 
-    private readonly logger = new Logger(DuplicateService.name)
-
     constructor(
     ) {}
     
-    private aggregator: string[] = []
-
-    @Cron(CronExpression.EVERY_MINUTE)
-    private cleanAgreagotr() {
-        this.aggregator = []
-    }
+    private telegramMessageIdsAggregator: number[] = []
 
 
-    public async saveMessage(message: TelegramMessage) {
-        this.aggregator.push(message.message)
-    }
+    public telegramMessageIdDuplicated(message: TelegramMessage): boolean {
+        const messaggeId = message.id
 
-    public async messageIsDuplicate(message: TelegramMessage): Promise<boolean> {
-        const msg = message?.message
-        return this.aggregator.includes(msg)
+        const isDuplicated = this.telegramMessageIdsAggregator.includes(messaggeId)
+        if (isDuplicated) {
+            return true
+        } else {
+            this.telegramMessageIdsAggregator.pop()
+            this.telegramMessageIdsAggregator.push(messaggeId)
+            return false
+        }
     }
 
 }

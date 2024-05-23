@@ -159,6 +159,7 @@ export class DiscordService {
 
     private subscribeForTelegramMessages(): void {
         this.telegramService.channelsMessages$.subscribe((message: TelegramMessage) => {
+            this.logger.debug(`Subscruption for message with id: [${message.id}]`)
             this.sendMessage(message)
         })
     }
