@@ -7,7 +7,7 @@ import { TelegramMessage, Photo } from './telegram-message';
 import { SignalService } from 'src/signal/signal.service';
 import { DuplicateService } from './duplicate.service';
 import { TelegramMessageRepo } from './telegram-message.repo';
-import { TelegramUpdateInfo, UpdateNewMessage, updateNewMessage, UpdateReadHistoryOutbox } from './interfaces';
+import { TelegramUpdateInfo, updateNewChannelMessage, UpdateNewMessage, updateNewMessage, UpdateReadHistoryOutbox } from './interfaces';
 
 // https://www.youtube.com/watch?v=TRNeRySFtg0
 
@@ -20,8 +20,6 @@ export class TelegramService {
     private readonly api_hash = process.env.TELEGRAM_API_HASH
     private readonly phoneNumber = process.env.TELEGRAM_PHONE_NUMBER
     private readonly telegramChannelIds: string[] = []
-
-    private readonly testMode = process.env.TEST_MODE === 'true'
 
     private mtProto: MTProto
 
@@ -43,10 +41,10 @@ export class TelegramService {
         this.initFlag = true
         this.initChannelIds()
         this.initMTProto()
-        if (!this.testMode) {
-            await this.auth(this.phoneNumber)
-            this.subscribeToUpdates()
-        }
+
+        await this.auth(this.phoneNumber)
+        this.subscribeToUpdates()
+
         this.logger.log(`Bot is listening for messages from channels: ${this.telegramChannelIds.join(", ")}`)
     }
 
@@ -92,36 +90,42 @@ export class TelegramService {
 
     private subscribeToUpdates(): void {
         this.mtProto.updates.on('updates', (updateInfo: TelegramUpdateInfo) => {
-            updateInfo.updates.forEach(async (update: UpdateNewMessage | UpdateReadHistoryOutbox) => {
-                if (update._ === updateNewMessage) {
-                    const message = update?.message as TelegramMessage
-                    if (message) {
-                        this.onMessage(message)
+            updateInfo.updates.forEach(async (update: any) => {
+                if (this.isMessageUpdate(update)) {
+                    const telegramMessage: TelegramMessage = update?.message
+                    if (telegramMessage) {
+                        this.onMessage(telegramMessage)
                     }
                 }
             })
         })
     }
 
-    private async onMessage(message: TelegramMessage) {
-        const telegramChannelId = message.peer_id?.channel_id || message.peer_id?.user_id.toString()
+    private isMessageUpdate(update: any) {
+        return [updateNewMessage, updateNewChannelMessage].includes(update._)
+    }
+
+    private async onMessage(telegramMessage: TelegramMessage) {
+        const telegramChannelId = telegramMessage.peer_id?.channel_id || telegramMessage.peer_id?.user_id.toString()
         if (this.telegramChannelIds.includes(telegramChannelId)) {
-            this.telegramMessageRepo.save(message)
+            this.telegramMessageRepo.save(telegramMessage)
 
-            this.logger.log(`Received message with id: ${message.id}, from telegram: ${telegramChannelId}`)
-            if (!message?.message) {
-                this.logger.log(`Message with id: ${message.id}, has no content message`)
+            this.logger.log(`Received message with id: ${telegramMessage.id}, from telegram: ${telegramChannelId}`)
+            if (!telegramMessage?.message) {
+                this.logger.log(`Message with id: ${telegramMessage.id}, has no content message`)
                 return
             }
-            this.logger.debug(message?.message)
+            this.logger.debug(telegramMessage?.message)
 
-            if (this.duplicateService.telegramMessageIdDuplicated(message)) {
-                this.logger.warn(`Telegram message with id [${message.id}] duplicate PREVENTED`)
+            if (this.duplicateService.telegramMessageIsDuplicated(telegramMessage)) {
+                this.logger.warn(`Telegram message with id [${telegramMessage.id}] duplicate PREVENTED`)
                 return
             }
 
-            this.signalService.processIfSignal(message)
-            this._channelsMessages$.next(message)
+            this.signalService.processIfSignal(telegramMessage)
+            this._channelsMessages$.next(telegramMessage)
+        } else {
+            this.logger.log(`Received message with id [${telegramMessage.id}] - NOT in telegramChannelIds list!`)
         }
     }
 

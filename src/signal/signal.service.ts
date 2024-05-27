@@ -16,11 +16,11 @@ export class SignalService {
         private readonly http: HttpService
     ) {}
 
-    async processIfSignal(message: TelegramMessage) {
-        if (this.isSignalTelegramMessage(message)) {
+    async processIfSignal(telegramMessage: TelegramMessage) {
+        if (this.isSignalTelegramMessage(telegramMessage)) {
             if (this.signalMessageForwardUrl) {
                 try {
-                    await lastValueFrom(this.http.post(process.env.SIGNAL_MESSAGE_FORWARD_URL, message))
+                    await lastValueFrom(this.http.post(process.env.SIGNAL_MESSAGE_FORWARD_URL, telegramMessage))
                     this.logger.log('Posted signal message to binance bot! ')
                 } catch (error) {
                     const errorMessage = error?.response?.data?.message ?? error

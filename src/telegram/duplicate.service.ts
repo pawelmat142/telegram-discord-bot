@@ -10,9 +10,8 @@ export class DuplicateService {
     private telegramMessageIdsAggregator: number[] = []
 
 
-    public telegramMessageIdDuplicated(message: TelegramMessage): boolean {
+    public telegramMessageIsDuplicated(message: TelegramMessage): boolean {
         const messaggeId = message.id
-
         const isDuplicated = this.telegramMessageIdsAggregator.includes(messaggeId)
         if (isDuplicated) {
             return true

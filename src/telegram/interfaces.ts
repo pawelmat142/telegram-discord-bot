@@ -2,6 +2,7 @@ import { TelegramMessage } from "./telegram-message";
 
 
 export const updateNewMessage = 'updateNewMessage'
+export const updateNewChannelMessage = 'updateNewChannelMessage'
 export const updateReadHistoryOutbox = 'updateReadHistoryOutbox'
 
 
