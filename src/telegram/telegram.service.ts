@@ -60,7 +60,6 @@ export class TelegramService implements OnModuleInit {
                 if (['updateNewMessage', 'updateNewChannelMessage'].includes(telegramUpdate._)) {
                     const telegramMessage = telegramUpdate?.message as TelegramMessage
                     if (telegramMessage?._ === 'message') {
-                        console.log(telegramMessage)
                         this.onMessage(telegramMessage)
                     }
                 }
