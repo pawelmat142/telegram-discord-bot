@@ -1,27 +1,36 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Subject } from 'rxjs';
-import * as MTProto from '@mtproto/core';
 import * as path from 'path';
 import * as prompt from 'prompt';
 import { TelegramMessage, Photo } from './telegram-message';
 import { SignalService } from 'src/signal/signal.service';
 import { DuplicateService } from './duplicate.service';
 import { TelegramMessageRepo } from './telegram-message.repo';
-import { TelegramUpdateInfo, updateNewChannelMessage, UpdateNewMessage, updateNewMessage, UpdateReadHistoryOutbox } from './interfaces';
+import { MTProtoClient } from './mtproto';
+import { AuthResponse, AuthUser, TelegramUpdate, TelegramUpdates } from './model';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 // https://www.youtube.com/watch?v=TRNeRySFtg0
 
 @Injectable()
-export class TelegramService {
+export class TelegramService implements OnModuleInit {
     
     private readonly logger = new Logger(TelegramService.name)
 
-    private readonly api_id = parseInt(process.env.TELEGRAM_API_ID)
-    private readonly api_hash = process.env.TELEGRAM_API_HASH
-    private readonly phoneNumber = process.env.TELEGRAM_PHONE_NUMBER
+    private readonly API_ID = parseInt(process.env.TELEGRAM_API_ID)
+    private readonly API_HASH = process.env.TELEGRAM_API_HASH
+    private readonly API_PHONE_NUMBER = process.env.TELEGRAM_PHONE_NUMBER
+
     private readonly telegramChannelIds: string[] = []
 
-    private mtProto: MTProto
+    client: MTProtoClient
+
+    private _channelsMessages$ = new Subject<TelegramMessage>()
+    
+    public get channelsMessages$() {
+        return this._channelsMessages$.asObservable()
+    }
+    
 
     constructor(
         private readonly signalService: SignalService,
@@ -29,27 +38,59 @@ export class TelegramService {
         private readonly telegramMessageRepo: TelegramMessageRepo,
     ) {}
 
-    private _channelsMessages$ = new Subject<TelegramMessage>()
-    public channelsMessages$ = this._channelsMessages$.asObservable()
+    onModuleInit() {
+        this.initMtProtoClient()
+    }
+
+    @Cron(CronExpression.EVERY_DAY_AT_3AM)
+    async initMtProtoClient() {
+        this.logger.warn(`[START] MTProtoClient initialization`)
+        const config = {
+            api_id: this.API_ID,
+            api_hash: this.API_HASH,
+            sessionPath: path.resolve(__dirname, 'your_session_file.json')
+        }
+        
+        this.client = new MTProtoClient(config)
+        
+        await this.auth()
+        
+        this.client.mtproto.updates.on('updates', (telegramUpdates: TelegramUpdates) => {
+            telegramUpdates.updates.forEach((telegramUpdate: TelegramUpdate) => {
+                if (['updateNewMessage', 'updateNewChannelMessage'].includes(telegramUpdate._)) {
+                    const telegramMessage = telegramUpdate?.message as TelegramMessage
+                    if (telegramMessage?._ === 'message') {
+                        console.log(telegramMessage)
+                        this.onMessage(telegramMessage)
+                    }
+                }
+            })
+        })
+        
+        this.client.mtproto.updates.on('error', (error) => {
+            this.logger.error('MTProtoClient error:', error);
+        });
+
+        this.client.mtproto.updates.on('disconnect', () => {
+            this.logger.warn('MTProtoClient disconnected');
+        });
+
+        this.client.mtproto.updates.on('reconnect', () => {
+            this.logger.log('MTProtoClient reconnected');
+        });
+        
+        this.logger.warn(`[STOP] MTProtoClient initialization`)
+    }
+
 
     private initFlag = false
 
-    public async initService() {
+    public initChannelIds() {
         if (this.initFlag) {
             return
         }
         this.initFlag = true
-        this.initChannelIds()
-        this.initMTProto()
 
-        await this.auth(this.phoneNumber)
-        this.subscribeToUpdates()
-
-        this.logger.log(`Bot is listening for messages from channels: ${this.telegramChannelIds.join(", ")}`)
-    }
-
-
-    private initChannelIds() {
         var iterator = 1
         var channelId = ''
         do {
@@ -59,51 +100,76 @@ export class TelegramService {
             } else break
         } while(iterator++)
         if (!this.telegramChannelIds.length) throw new Error('Not found any channel id')
+
+        this.logger.log(`Bot is listening for messages from channels: ${this.telegramChannelIds.join(", ")}`)
     }
 
-    private initMTProto(): void {
-        this.mtProto = new MTProto({
-            api_id: this.api_id,
-            api_hash: this.api_hash,
-            test: false,
-            storageOptions: {
-                path: path.resolve(__dirname, `./data/1.json`)
-            }
-        })
-    }
 
-    public async auth(phoneNumber: string): Promise<void> {
-        prompt.start()
+    private async auth(): Promise<void> {
         try {
+            prompt.start()
+
             await this.checkLogin()
+            this.logger.warn('MTProtoClient already authorized')
         } catch (error) {
-            this.logger.error(error)
+            if (error?.error_message === 'AUTH_KEY_UNREGISTERED') {
+                this.logger.warn(`Authorization...`)
+                await this.client.mtproto.setDefaultDc(4)
+                const { phone_code_hash } = await this.sendCode()
+                
+                const { code } = await prompt.get(['code'])
 
-            await this.mtProto.setDefaultDc(4)
-            const { phone_code_hash } = await this.sendCode(phoneNumber)
-            this.logger.log('sendCode()')
-
-            const { code } = await prompt.get(['code'])
-            await this.signIn({ code, phoneNumber, phone_code_hash })
+                const user = await this.signIn({ code, phone_code_hash })
+                if (!user) {
+                    this.logger.warn('MTProtoClient authorization failed')
+                    return
+                }
+                this.logger.warn('MTProtoClient authorized')
+            } else {
+                this.logger.error(error)
+            }
         }
     }
 
-    private subscribeToUpdates(): void {
-        this.mtProto.updates.on('updates', (updateInfo: TelegramUpdateInfo) => {
-            updateInfo.updates.forEach(async (update: any) => {
-                if (this.isMessageUpdate(update)) {
-                    const telegramMessage: TelegramMessage = update?.message
-                    if (telegramMessage) {
-                        this.onMessage(telegramMessage)
-                    }
-                }
-            })
-        })
+    private async checkLogin(): Promise<void> {
+        await this.client.mtproto.call("users.getFullUser", {
+          id: {
+            _: "inputUserSelf",
+          },
+        });
     }
 
-    private isMessageUpdate(update: any) {
-        return [updateNewMessage, updateNewChannelMessage].includes(update._)
+    private sendCode(): Promise<any> {
+        return this.client.mtproto.call('auth.sendCode', {
+            phone_number: this.API_PHONE_NUMBER,
+            settings: {
+                _: 'codeSettings'
+            }
+        })
+        .catch(error => console.error(error.error_message ?? error))
     }
+
+    private async signIn({ code, phone_code_hash }): Promise<AuthUser> {
+        try {
+            const params = {
+                phone_code: code,
+                phone_number: this.API_PHONE_NUMBER,
+                phone_code_hash: phone_code_hash
+            }
+            const res = await this.client.mtproto.call('auth.signIn', params)
+
+            if (res?._ === 'auth.authorization') {
+                const response = res as AuthResponse
+                return response.user
+            }
+        } catch (error) {
+            this.logger.error(error.error_message ?? error)
+            if (error.error_message !== 'SESSION_PASSWORD_NEEDED') {
+                return
+            }
+        }
+    }
+
 
     private async onMessage(telegramMessage: TelegramMessage) {
         const telegramChannelId = telegramMessage.peer_id?.channel_id || telegramMessage.peer_id?.user_id.toString()
@@ -130,47 +196,11 @@ export class TelegramService {
     }
 
 
-    private sendCode(mobile: string): Promise<any> {
-        return this.mtProto.call('auth.sendCode', {
-            phone_number: mobile,
-            settings: {
-                _: 'codeSettings'
-            }
-        })
-        .catch(error => console.error(error))
-    }
-
-    private async signIn({ code, phoneNumber, phone_code_hash }) {
-        try {
-            return await this.mtProto.call('auth.signIn', {
-                phone_code: code,
-                phone_number: phoneNumber,
-                phone_code_hash: phone_code_hash
-            })
-        } catch (error) {
-            this.logger.log(error)
-            if (error.error_messahe !== 'SESSION_PASSWORD_NEEDED') {
-                return
-            }
-        }
-        return undefined
-    }
-
-
-    private async checkLogin(): Promise<void> {
-        await this.mtProto.call("users.getFullUser", {
-          id: {
-            _: "inputUserSelf",
-          },
-        });
-    }
-
-
     public async getPhoto(message: TelegramMessage): Promise<Uint8Array> {
         const photo = message?.media?.photo
         if (photo) {
             try {
-                const file = await this.mtProto.call('upload.getFile', {
+                const file = await this.client.mtproto.call('upload.getFile', {
                     location: {
                       _: 'inputPhotoFileLocation',
                       id: photo.id,

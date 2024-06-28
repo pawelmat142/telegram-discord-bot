@@ -38,7 +38,7 @@ export class DiscordService {
         }
         this.logger.log('[START] Initialization')
         this.initFlag = true
-        await this.telegramService.initService()
+        await this.telegramService.initChannelIds()
         // TODO
         if (this.testMode) {
             return

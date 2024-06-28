@@ -25,24 +25,26 @@ export class MessageMedia {
     @Prop() photo: Photo
 }
 
-export type TelegramMessageType = 'message'
-
 @Schema()
 export class TelegramMessage {
 
-    _: TelegramMessageType
-
-    @Prop() date: number
-    @Prop() message: string
-    @Prop() id: number
-
-    @Prop() from_id: PeerUser
-    @Prop() peer_id: PeerUser
-
-    @Prop() via_bot_id: number
-
-    @Prop() out: boolean
-
+    @Prop() _: 'message';
+    @Prop() flags: number;
+    @Prop() out: boolean;
+    @Prop() mentioned: boolean;
+    @Prop() media_unread: boolean;
+    @Prop() silent: boolean;
+    @Prop() post: boolean;
+    @Prop() from_scheduled: boolean;
+    @Prop() legacy: boolean;
+    @Prop() edit_hide: boolean;
+    @Prop() pinned: boolean;
+    @Prop() noforwards: boolean;
+    @Prop() id: number;
+    @Prop() from_id: PeerUser;
+    @Prop() peer_id: PeerUser;
+    @Prop() date: number;
+    @Prop() message: string;
     @Prop() media: MessageMedia
 }
 
