@@ -116,6 +116,7 @@ export class TelegramService implements OnModuleInit {
                 await this.client.mtproto.setDefaultDc(4)
                 const { phone_code_hash } = await this.sendCode()
                 
+                this.logger.log('Provide code...')
                 const { code } = await prompt.get(['code'])
 
                 const user = await this.signIn({ code, phone_code_hash })
