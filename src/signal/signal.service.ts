@@ -10,11 +10,12 @@ export class SignalService {
 
     private readonly signalMessageForwardUrl = process.env.SIGNAL_MESSAGE_FORWARD_URL
 
-    private readonly signalTelegramChannelId = process.env.SIGNAL_TELEGRAM_CHANNEL_ID
+    private readonly signalChannelIds: string[] = process.env.SIGNAL_TELEGRAM_CHANNEL_IDS.split('_')
 
     constructor(
         private readonly http: HttpService
     ) {}
+
 
     async processIfSignal(telegramMessage: TelegramMessage) {
         if (this.isSignalTelegramMessage(telegramMessage)) {
@@ -34,7 +35,7 @@ export class SignalService {
 
     private isSignalTelegramMessage(message: TelegramMessage): boolean {
         const updateChannelId = message.peer_id?.channel_id
-        return updateChannelId === this.signalTelegramChannelId
+        return this.signalChannelIds.includes(updateChannelId)
     }
 
 }
