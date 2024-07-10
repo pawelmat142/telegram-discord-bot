@@ -14,7 +14,9 @@ export class SignalService {
 
     constructor(
         private readonly http: HttpService
-    ) {}
+    ) {
+        this.logger.warn(`signal channel ids: [ ${this.signalChannelIds.join(', ')} ]`)
+    }
 
 
     async processIfSignal(telegramMessage: TelegramMessage) {
