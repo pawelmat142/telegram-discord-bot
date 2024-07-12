@@ -93,7 +93,11 @@ export class DiscordService {
             files: photoFile ? [photoFile] : undefined
         }
 
-        await ctx.discordChannel.send(options)
+        try {
+            await ctx.discordChannel.send(options)
+        } catch (error) {
+            this.logger.error(error)
+        }
     }
 
 
