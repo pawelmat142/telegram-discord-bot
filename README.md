@@ -1,6 +1,6 @@
 ## Description
 
-Bot for automatically sending messages from a private telegram channel to a discord channel. Build with NestJS
+Bot for automatically forwarding messages from a private telegram channel to a discord channel. Build with NestJS
 
 ## Installation
 
